@@ -1,19 +1,15 @@
-package main
+package tests
 
 import (
 	"github.com/go-portfolio/concurrency-scraper/internal/scraper"
 	"github.com/go-portfolio/concurrency-scraper/pkg/logger"
+	"testing"
 )
 
-func main() {
+func TestScraper(t *testing.T) {
 	log := logger.New()
-
-	startURLs := []string{
-		"https://example.com",
-		"https://golang.org",
-		"https://httpbin.org",
-	}
-
 	s := scraper.New(log)
-	s.Run(startURLs, 5) // 5 workers
+
+	urls := []string{"https://httpbin.org/html"}
+	s.Run(urls, 2)
 }
