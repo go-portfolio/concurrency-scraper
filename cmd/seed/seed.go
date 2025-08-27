@@ -30,14 +30,15 @@ func main() {
 
 	// Данные для seed
 	urls := []string{
-		"https://golangweekly.com",
-		"https://blog.golang.org",
-		"https://news.ycombinator.com",
-		"https://github.com/golang/go",
-		"https://go.dev/blog",
-		"https://dev.to/t/golang",
-		"https://medium.com/tag/golang",
-		"https://go101.org",
+		"https://golang.org",
+		"https://go.dev",
+		"https://news.ycombinator.com",                  // Хакерньюс — довольно открытый
+		"https://reddit.com/r/golang",                   // Reddit Golang subreddit
+		"https://dev.to/t/golang",                       // Dev.to тег Golang
+		"https://stackoverflow.com/questions/tagged/go", // СтэкОверфлоу с тегом Go
+		"https://pkg.go.dev",                            // Документация Go пакетов
+		"https://blog.golang.org",                       // Официальный блог Go
+		"https://go101.org",                             // go101.org — бесплатный учебник по Go
 	}
 
 	// Загружаем данные в таблицу urls

@@ -1,0 +1,1 @@
+ALTER TABLE pages DROP CONSTRAINT unique_url_id;
