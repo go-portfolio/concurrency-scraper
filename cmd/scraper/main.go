@@ -7,9 +7,9 @@ import (
 	"github.com/go-portfolio/concurrency-scraper/internal/config"
 	"github.com/go-portfolio/concurrency-scraper/internal/db"
 	"github.com/go-portfolio/concurrency-scraper/internal/httpclient"
-	"github.com/go-portfolio/concurrency-scraper/internal/logger"
-	"github.com/go-portfolio/concurrency-scraper/internal/worker"
 	"github.com/go-portfolio/concurrency-scraper/internal/scraper"
+	"github.com/go-portfolio/concurrency-scraper/internal/worker"
+	"github.com/go-portfolio/concurrency-scraper/pkg/logger"
 )
 
 func main() {

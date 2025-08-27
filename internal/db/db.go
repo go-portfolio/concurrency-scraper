@@ -1,6 +1,8 @@
 package db
 
-import "github.com/go-portfolio/concurrency-scraper/internal/models"
+import (
+	"github.com/go-portfolio/concurrency-scraper/internal/models"
+)
 
 // DB — интерфейс для слоя доступа к данным (для тестирования)
 type DB interface {
