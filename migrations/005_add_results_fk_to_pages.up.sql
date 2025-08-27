@@ -1,0 +1,2 @@
+ALTER TABLE pages
+ADD COLUMN result_id INT REFERENCES results(id) ON DELETE SET NULL;

@@ -50,33 +50,29 @@ func (db *DB) GetURLs() ([]URL, error) {
 	return urls, nil
 }
 
-// SaveResult сохраняет результат скрейпинга для конкретного URL в таблицу results
-func (db *DB) SaveResult(urlID int, content string) error {
-	_, err := db.Exec("INSERT INTO results(url_id, content) VALUES($1, $2)", urlID, content)
-	return err
+
+// сохраняем raw HTML
+func (db *DB) SaveResult(urlID int, content string) (int, error) {
+    var id int
+    err := db.QueryRow(`
+        INSERT INTO results (url_id, content, created_at)
+        VALUES ($1, $2, NOW())
+        RETURNING id
+    `, urlID, content).Scan(&id)
+    return id, err
 }
 
-
-// Обрабатываем результаты из канала и сохраняем в базу данных
-func (db * DB) SavePageData(data PageData) error {
-	query := `
-		INSERT INTO pages (url, url_id, title, summary, word_count, fetched_at)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		ON CONFLICT (url_id) DO UPDATE SET
-			title = EXCLUDED.title,
-			summary = EXCLUDED.summary,
-			word_count = EXCLUDED.word_count,
-			fetched_at = EXCLUDED.fetched_at;
-	`
-
-	_, err := db.DB.Exec(query,
-		data.URL,
-		data.URLID,
-		data.Title,
-		data.Summary,
-		data.WordCount,
-		data.FetchedAt,
-	)
-
-	return err
+// сохраняем обработанные данные
+func (db *DB) SavePageData(r ScrapeResult, resultID int) error {
+    _, err := db.Exec(`
+        INSERT INTO pages (url, url_id, title, summary, word_count, fetched_at, result_id)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        ON CONFLICT (url_id) DO UPDATE SET
+            title = EXCLUDED.title,
+            summary = EXCLUDED.summary,
+            word_count = EXCLUDED.word_count,
+            fetched_at = EXCLUDED.fetched_at,
+            result_id = EXCLUDED.result_id
+    `, r.URL, r.URLID, r.Title, r.Summary, r.WordCount, r.FetchedAt, resultID)
+    return err
 }

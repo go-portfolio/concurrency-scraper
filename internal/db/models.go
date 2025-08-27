@@ -15,6 +15,18 @@ type Result struct {
 	CreatedAt time.Time
 }
 
+// Общая структура данных, передаваемая из Scraper → DB
+type ScrapeResult struct {
+    URL       string
+    URLID     int
+    Title     string
+    Summary   string
+    Language  string
+    WordCount int
+    FetchedAt time.Time
+    Content   string // raw HTML
+}
+
 type PageData struct {
 	URL       string
 	URLID     int

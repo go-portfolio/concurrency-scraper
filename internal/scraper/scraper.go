@@ -57,6 +57,7 @@ func (s *Scraper) Run(workers int) error {
 		Language  string
 		WordCount int
 		FetchedAt time.Time
+		Content   string // сырой HTML
 	}, 10)
 
 	wg.Add(2) // ждём две горутины
@@ -65,12 +66,21 @@ func (s *Scraper) Run(workers int) error {
 	// Горутина №1 — запись результатов
 	go func() {
 		defer wg.Done() // уменьшает счётчик, когда завершится
+
 		for r := range results {
-			err := s.db.SavePageData(r)
+			// Сохраняем сырой HTML → results
+			resultID, err := s.db.SaveResult(r.URLID, r.Content)
 			if err != nil {
-				s.log.Error("Ошибка сохранения URL ID %d: %v", r.URLID, err)
+				s.log.Error("Ошибка сохранения results: %v", err)
+				continue
+			}
+
+			// Сохраняем обработанные данные → pages
+			err = s.db.SavePageData(r, resultID)
+			if err != nil {
+				s.log.Error("Ошибка сохранения pages: %v", err)
 			} else {
-				s.log.Info("Сохранено: %s", r.URL)
+				s.log.Info("Сохранено: %s (result_id=%d)", r.URL, resultID)
 			}
 		}
 	}()
@@ -106,15 +116,15 @@ func (s *Scraper) Run(workers int) error {
 				text := doc.Find("body").Text()
 				wordCount := len(strings.Fields(text))
 
-				results <- db.PageData{
+				results <- db.ScrapeResult{
 					URL:       u.URL,
 					URLID:     u.ID,
 					Title:     strings.TrimSpace(title),
 					Summary:   strings.TrimSpace(summary),
 					WordCount: wordCount,
 					FetchedAt: time.Now(),
+					Content:   body, // сохраняем raw HTML
 				}
-
 			})
 		}
 		pool.Close()
