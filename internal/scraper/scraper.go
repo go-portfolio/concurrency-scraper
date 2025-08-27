@@ -2,6 +2,7 @@ package scraper
 
 import (
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-portfolio/concurrency-scraper/internal/db"
@@ -36,6 +37,8 @@ func New(log logger.Logger, database *db.DB) *Scraper {
 // 3. Отправляет задачи на загрузку страниц.
 // 4. Сохраняет результаты в базе данных.
 func (s *Scraper) Run(workers int) error {
+	var wg sync.WaitGroup
+
 	// Получаем список URL из базы
 	urls, err := s.db.GetURLs()
 	if err != nil {
@@ -54,10 +57,29 @@ func (s *Scraper) Run(workers int) error {
 		Language  string
 		WordCount int
 		FetchedAt time.Time
-	})
+	}, 10)
+
+	wg.Add(2) // ждём две горутины
+
+	// Читаем результаты и сохраняем в базу — ЗАПУСКАЕМ ДО начала скрейпа
+	// Горутина №1 — запись результатов
+	go func() {
+		defer wg.Done() // уменьшает счётчик, когда завершится
+		for r := range results {
+			err := s.db.SavePageData(r)
+			if err != nil {
+				s.log.Error("Ошибка сохранения URL ID %d: %v", r.URLID, err)
+			} else {
+				s.log.Info("Сохранено: %s", r.URL)
+			}
+		}
+	}()
 
 	// Отправляем задачи в пул воркеров
+	// Горутина №2 — загрузка и парсинг
 	go func() {
+		defer wg.Done() // уменьшает счётчик, когда завершится
+		s.log.Info("Количество URL для обработки: %d", len(urls))
 		for _, u := range urls {
 			u := u // локальная копия
 			pool.Submit(func() {
@@ -99,5 +121,6 @@ func (s *Scraper) Run(workers int) error {
 		close(results)
 	}()
 
+	wg.Wait()
 	return nil
 }
