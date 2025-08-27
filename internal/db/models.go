@@ -14,3 +14,13 @@ type Result struct {
 	Content   string
 	CreatedAt time.Time
 }
+
+type PageData struct {
+	URL       string
+	URLID     int
+	Title     string
+	Summary   string
+	Language  string
+	WordCount int
+	FetchedAt time.Time
+}
