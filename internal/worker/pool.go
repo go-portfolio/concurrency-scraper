@@ -2,44 +2,40 @@ package worker
 
 import "sync"
 
-// Pool реализует шаблон Worker Pool.
-// Он управляет группой горутин-воркеров, которые выполняют задачи из канала.
-type Pool struct {
-	wg    sync.WaitGroup // используется для ожидания завершения всех задач
-	tasks chan func()    // канал, куда передаются задачи (функции без аргументов)
+// Pool — интерфейс пула, удобный для моков
+type Pool interface {
+	Submit(func())
+	Close()
 }
 
-// NewPool создаёт новый пул воркеров.
-// Аргумент size — это количество горутин, которые будут одновременно обрабатывать задачи.
-func NewPool(size int) *Pool {
-	p := &Pool{
-		tasks: make(chan func(), size), // создаём канал для задач
-	}
+// реализация
+type pool struct {
+	wg    sync.WaitGroup
+	tasks chan func()
+}
 
-	// Запускаем указанное количество воркеров.
-	// Каждый воркер ждёт задачи в канале p.tasks, выполняет её и отмечает завершение.
+// NewPool создаёт пул воркеров
+func NewPool(size int) Pool {
+	p := &pool{
+		tasks: make(chan func(), size),
+	}
 	for i := 0; i < size; i++ {
 		go func() {
 			for task := range p.tasks {
-				task()      // выполняем задачу
-				p.wg.Done() // уменьшаем счётчик wg, говоря "задача завершена"
+				task()
+				p.wg.Done()
 			}
 		}()
 	}
-
 	return p
 }
 
-// Submit отправляет задачу в пул для выполнения.
-// wg.Add(1) увеличивает счётчик активных задач.
-func (p *Pool) Submit(task func()) {
-	p.wg.Add(1)      // добавляем задачу в счётчик
-	p.tasks <- task  // отправляем задачу в канал
+func (p *pool) Submit(task func()) {
+	p.wg.Add(1)
+	p.tasks <- task
 }
 
-// Close дожидается выполнения всех задач и закрывает канал.
-// После вызова Close новые задачи отправить уже нельзя.
-func (p *Pool) Close() {
-	p.wg.Wait()   // ждём, пока все задачи завершатся
-	close(p.tasks) // закрываем канал задач
+func (p *pool) Close() {
+	p.wg.Wait()
+	close(p.tasks)
 }

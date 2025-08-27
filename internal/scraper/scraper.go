@@ -5,79 +5,56 @@ import (
 	"sync"
 	"time"
 
+	"github.com/PuerkitoBio/goquery"
+
+	"github.com/go-portfolio/concurrency-scraper/internal/models"
 	"github.com/go-portfolio/concurrency-scraper/internal/db"
 	"github.com/go-portfolio/concurrency-scraper/internal/httpclient"
 	"github.com/go-portfolio/concurrency-scraper/internal/worker"
-	"github.com/go-portfolio/concurrency-scraper/pkg/logger"
-
-	"github.com/PuerkitoBio/goquery"
+	"github.com/go-portfolio/concurrency-scraper/internal/logger"
 )
 
-// Scraper — главный объект для запуска веб-скрейпера.
-// Содержит логгер для вывода сообщений, HTTP-клиент для загрузки страниц и доступ к базе данных.
+// Scraper — объект скрейпера, принимает интерфейсы
 type Scraper struct {
-	log    logger.Logger     // Логгер для вывода ошибок и информации
-	client httpclient.Client // HTTP-клиент для загрузки страниц
-	db     *db.DB            // Подключение к базе данных для получения URL и сохранения результатов
+	log    logger.Logger
+	client httpclient.Client
+	db     db.DB
+	pool   worker.Pool
 }
 
-// New создаёт новый экземпляр Scraper с переданным логгером и базой данных.
-// HTTP-клиент создаётся автоматически.
-func New(log logger.Logger, database *db.DB) *Scraper {
+// New — конструктор с инъекцией зависимостей
+func New(log logger.Logger, client httpclient.Client, database db.DB, pool worker.Pool) *Scraper {
 	return &Scraper{
 		log:    log,
-		client: httpclient.New(), // Создаём новый HTTP-клиент
+		client: client,
 		db:     database,
+		pool:   pool,
 	}
 }
 
-// Run запускает процесс скрейпинга с указанным количеством воркеров.
-// 1. Получает список URL из базы данных.
-// 2. Создаёт пул воркеров.
-// 3. Отправляет задачи на загрузку страниц.
-// 4. Сохраняет результаты в базе данных.
+// Run — основной рабочий цикл
 func (s *Scraper) Run(workers int) error {
 	var wg sync.WaitGroup
 
-	// Получаем список URL из базы
 	urls, err := s.db.GetURLs()
 	if err != nil {
 		return err
 	}
 
-	// Создаём пул воркеров
-	pool := worker.NewPool(workers)
+	results := make(chan models.ScrapeResult, 10)
 
-	// Канал для передачи результатов между воркерами и основной горутиной
-	results := make(chan struct {
-		URL       string
-		URLID     int
-		Title     string
-		Summary   string
-		Language  string
-		WordCount int
-		FetchedAt time.Time
-		Content   string // сырой HTML
-	}, 10)
+	wg.Add(2)
 
-	wg.Add(2) // ждём две горутины
-
-	// Читаем результаты и сохраняем в базу — ЗАПУСКАЕМ ДО начала скрейпа
-	// Горутина №1 — запись результатов
+	// Writer goroutine
 	go func() {
-		defer wg.Done() // уменьшает счётчик, когда завершится
-
+		defer wg.Done()
 		for r := range results {
-			// Сохраняем сырой HTML → results
 			resultID, err := s.db.SaveResult(r.URLID, r.Content)
 			if err != nil {
 				s.log.Error("Ошибка сохранения results: %v", err)
 				continue
 			}
-
-			// Сохраняем обработанные данные → pages
-			err = s.db.SavePageData(r, resultID)
-			if err != nil {
+			if err := s.db.SavePageData(r, resultID); err != nil {
 				s.log.Error("Ошибка сохранения pages: %v", err)
 			} else {
 				s.log.Info("Сохранено: %s (result_id=%d)", r.URL, resultID)
@@ -85,21 +62,19 @@ func (s *Scraper) Run(workers int) error {
 		}
 	}()
 
-	// Отправляем задачи в пул воркеров
-	// Горутина №2 — загрузка и парсинг
+	// Submitter goroutine
 	go func() {
-		defer wg.Done() // уменьшает счётчик, когда завершится
+		defer wg.Done()
 		s.log.Info("Количество URL для обработки: %d", len(urls))
 		for _, u := range urls {
-			u := u // локальная копия
-			pool.Submit(func() {
+			u := u
+			s.pool.Submit(func() {
 				body, err := s.client.Fetch(u.URL)
 				if err != nil {
 					s.log.Error("Ошибка загрузки %s: %v", u.URL, err)
 					return
 				}
 
-				// Парсим HTML
 				doc, err := goquery.NewDocumentFromReader(strings.NewReader(body))
 				if err != nil {
 					s.log.Error("Ошибка парсинга %s: %v", u.URL, err)
@@ -111,23 +86,23 @@ func (s *Scraper) Run(workers int) error {
 				if summary == "" {
 					summary, _ = doc.Find(`meta[property="og:description"]`).Attr("content")
 				}
-
-				// Подсчет слов
 				text := doc.Find("body").Text()
 				wordCount := len(strings.Fields(text))
 
-				results <- db.ScrapeResult{
+				results <- models.ScrapeResult{
 					URL:       u.URL,
 					URLID:     u.ID,
 					Title:     strings.TrimSpace(title),
 					Summary:   strings.TrimSpace(summary),
 					WordCount: wordCount,
 					FetchedAt: time.Now(),
-					Content:   body, // сохраняем raw HTML
+					Content:   body,
 				}
 			})
 		}
-		pool.Close()
+
+		// дождёмся выполнения всех задач в пуле и закроем results
+		s.pool.Close()
 		close(results)
 	}()
 

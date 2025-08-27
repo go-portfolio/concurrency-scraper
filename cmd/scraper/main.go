@@ -6,13 +6,13 @@ import (
 
 	"github.com/go-portfolio/concurrency-scraper/internal/config"
 	"github.com/go-portfolio/concurrency-scraper/internal/db"
+	"github.com/go-portfolio/concurrency-scraper/internal/httpclient"
+	"github.com/go-portfolio/concurrency-scraper/internal/logger"
+	"github.com/go-portfolio/concurrency-scraper/internal/worker"
 	"github.com/go-portfolio/concurrency-scraper/internal/scraper"
-	"github.com/go-portfolio/concurrency-scraper/pkg/logger"
 )
 
 func main() {
-	// Загружаем конфигурацию
-	// Определяем путь к текущему исходному файлу
 	_, filename, _, ok := runtime.Caller(0)
 	if !ok {
 		panic("Не удалось определить путь")
@@ -20,20 +20,25 @@ func main() {
 
 	cfg := config.Load(filename)
 
-	// Создаём логгер
-	logr := logger.New()
+	// логгер
+	logr := logger.NewStdLogger()
 
-	// Подключаемся к базе данных
-	database, err := db.New(cfg.DBUser, cfg.DBPass, cfg.DBHost, cfg.DBName, cfg.DBPort)
+	// база данных (SQL реализация)
+	sqlDB, err := db.NewSQLDB(cfg.DBUser, cfg.DBPass, cfg.DBHost, cfg.DBName, cfg.DBPort)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// Создаём скрейпер
-	s := scraper.New(logr, database)
+	// http client
+	httpc := httpclient.New()
 
-	// Запускаем с указанным количеством воркеров
+	// пул воркеров
+	pool := worker.NewPool(cfg.Workers)
+
+	// scraper (инъекция зависимостей)
+	s := scraper.New(logr, httpc, sqlDB, pool)
+
 	if err := s.Run(cfg.Workers); err != nil {
-		log.Fatal(err)
+		logr.Error("run error: %v", err)
 	}
 }
