@@ -36,7 +36,11 @@ jobs:
     - name: Install dependencies
       run: go mod download
 
-
     # 5. Code formatting check
     - name: Check code formatting
       run: go fmt ./...
+
+    # 6. Тестирование проекта
+    - name: Run tests
+      run: |
+        go test -v ./...
