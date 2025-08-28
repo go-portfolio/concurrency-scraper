@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-portfolio/concurrency-scraper/internal/config"
 	"github.com/go-portfolio/concurrency-scraper/internal/db"
+	"github.com/go-portfolio/concurrency-scraper/internal/es"
 	"github.com/go-portfolio/concurrency-scraper/internal/httpclient"
 	"github.com/go-portfolio/concurrency-scraper/internal/scraper"
 	"github.com/go-portfolio/concurrency-scraper/internal/worker"
@@ -25,7 +26,7 @@ func main() {
 	sqlDB := mustInitDB(appCfg)
 
 	// Инициализируем клиент Elasticsearch (с проверкой подключения)
-	mustInitElastic()
+	esClient := mustInitElastic()
 
 	// Создаём HTTP-клиент
 	httpc := httpclient.New()
@@ -34,7 +35,7 @@ func main() {
 	pool := worker.NewPool(appCfg.Workers)
 
 	// Инициализируем скрапер с зависимостями (логгер, http, БД, пул)
-	s := scraper.New(logr, httpc, sqlDB, pool)
+	s := scraper.New(logr, httpc, sqlDB, pool, esClient)
 
 	// Запускаем основной процесс скрапинга
 	if err := s.Run(appCfg.Workers); err != nil {
@@ -61,23 +62,30 @@ func mustInitDB(cfg *config.Config) *db.SQLDB {
 }
 
 // mustInitElastic инициализирует клиент Elasticsearch и проверяет его доступность
-func mustInitElastic() *elasticsearch.Client {
+func mustInitElastic() es.Client {
+	// Конфигурация ES клиента
 	esCfg := elasticsearch.Config{
 		Addresses: []string{"http://localhost:9200"},
 		// Username: "elastic",
 		// Password: "yourpassword",
 	}
-	es, err := elasticsearch.NewClient(esCfg)
+
+	// Проверяем доступность ES через стандартный клиент
+	esCheck, err := elasticsearch.NewClient(esCfg)
 	if err != nil {
 		log.Fatalf("Ошибка при создании клиента Elasticsearch: %s", err)
 	}
-
-	// Проверка доступности Elasticsearch
-	res, err := es.Info()
+	res, err := esCheck.Info()
 	if err != nil {
 		log.Fatalf("Ошибка при получении информации от Elasticsearch: %s", err)
 	}
 	defer res.Body.Close()
 
-	return es
+	// Создаем наш клиент, реализующий интерфейс es.Client
+	esClient, err := es.New([]string{"http://localhost:9200"}, "pages_index")
+	if err != nil {
+		log.Fatalf("Ошибка подключения к Elasticsearch: %v", err)
+	}
+
+	return esClient
 }
