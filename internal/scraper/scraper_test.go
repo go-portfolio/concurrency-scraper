@@ -47,6 +47,17 @@ type SyncPool struct{}
 func (p *SyncPool) Submit(task func()) { task() }
 func (p *SyncPool) Close()             {}
 
+type MockES struct{}
+
+func (m *MockES) IndexPage(result models.ScrapeResult) error {
+	return nil // просто noop для тестов
+}
+
+func (m *MockES) Close() error {
+	return nil
+}
+
+
 func TestScraper_Run(t *testing.T) {
 	mockDB := &MockDB{
 		URLs: []models.URL{
@@ -58,7 +69,8 @@ func TestScraper_Run(t *testing.T) {
 	mockPool := &SyncPool{}
 	mockLogger := &logger.MockLogger{}
 
-	s := New(mockLogger, mockClient, mockDB, mockPool)
+	mockES := &MockES{}
+	s := New(mockLogger, mockClient, mockDB, mockPool, mockES)
 
 	err := s.Run(2)
 	if err != nil {
