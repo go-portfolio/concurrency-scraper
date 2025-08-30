@@ -2,9 +2,9 @@ name: Go CI/CD
 
 on:
   push:
-    branches: [main]   # запускать на пуш в main
+    branches: [main, dev]   # запускать на пуш в main
   pull_request:
-    branches: [main]   # запускать на PR в main
+    branches: [main, dev]   # запускать на PR в main
 
 jobs:
   build-and-test:
@@ -44,3 +44,8 @@ jobs:
     - name: Run tests
       run: |
         go test -v ./...
+
+    # 7. Подсчёт строк кода
+    - name: Count lines of code
+      run: |
+        cloc .
