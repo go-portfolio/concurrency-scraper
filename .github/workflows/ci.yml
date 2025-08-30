@@ -48,8 +48,9 @@ jobs:
     # 7. Установка приложения cloc    
     - name: Install cloc via curl
       run: |
-        curl -L https://github.com/AlDanial/cloc/releases/download/v1.92/cloc-1.92-linux64.tar.gz | tar xz
-        sudo mv cloc-1.92-linux64/cloc /usr/local/bin/     
+        curl -L https://github.com/AlDanial/cloc/releases/download/v1.92/cloc-1.92-linux64.tar.gz --output cloc.tar.gz
+        tar -xzf cloc.tar.gz
+        sudo mv cloc-1.92-linux64/cloc /usr/local/bin/ 
 
     # 8. Подсчёт строк кода
     - name: Count lines of code
